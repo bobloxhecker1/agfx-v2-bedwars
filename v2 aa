@@ -2,7 +2,6 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local mouse = player:GetMouse()
@@ -127,22 +126,12 @@ player.CharacterAdded:Connect(function(char)
 	connectStateMonitor(humanoid)
 end)
 
---// Camera Lock
+--// Camera Lock (Fixed)
+local lockedTarget = nil
+
 RunService.RenderStepped:Connect(function()
-	if _G.CameraLocked then
-		local closest, dist = nil, math.huge
-		for _, plr in pairs(Players:GetPlayers()) do
-			if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not isTeammate(plr) then
-				local d = (plr.Character.HumanoidRootPart.Position - camera.CFrame.Position).Magnitude
-				if d < dist then
-					closest = plr.Character.HumanoidRootPart
-					dist = d
-				end
-			end
-		end
-		if closest then
-			camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
-		end
+	if _G.CameraLocked and lockedTarget and lockedTarget.Parent then
+		camera.CFrame = CFrame.new(camera.CFrame.Position, lockedTarget.Position)
 	end
 end)
 
@@ -268,6 +257,21 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VWExtra/main/metalesp.lua"))()
 	elseif input.KeyCode == Enum.KeyCode.X then
 		_G.CameraLocked = not _G.CameraLocked
+		if _G.CameraLocked then
+			local closest, dist = nil, math.huge
+			for _, plr in pairs(Players:GetPlayers()) do
+				if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not isTeammate(plr) then
+					local d = (plr.Character.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
+					if d < dist then
+						closest = plr.Character.HumanoidRootPart
+						dist = d
+					end
+				end
+			end
+			lockedTarget = closest
+		else
+			lockedTarget = nil
+		end
 	elseif input.KeyCode == Enum.KeyCode.R then
 		_G.SpeedLocked = not _G.SpeedLocked
 	end
