@@ -1,0 +1,274 @@
+--// Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local mouse = player:GetMouse()
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local camera = workspace.CurrentCamera
+
+--// Feature Flags
+_G.ESPEnabled = false
+_G.SpeedLocked = false
+_G.CameraLocked = false
+_G.AirCountdownEnabled = false
+_G.InfiniteJumpEnabled = false
+
+--// GUI Setup
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "@agfx"
+screenGui.ResetOnSpawn = false
+
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 400, 0, 400)
+mainFrame.Position = UDim2.new(0.3, 0, 0.2, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainFrame.BorderColor3 = Color3.fromRGB(255, 255, 255)
+mainFrame.BorderSizePixel = 2
+mainFrame.Active = true
+mainFrame.Draggable = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 10)
+
+local title = Instance.new("TextLabel", mainFrame)
+title.Text = "agfx v2"
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 20
+title.BorderSizePixel = 0
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 10)
+
+--// Toggle Button Template
+local function createToggleButton(parent, text, position, stateVar, onEnable, onDisable)
+	local btn = Instance.new("TextButton", parent)
+	btn.Size = UDim2.new(0, 180, 0, 40)
+	btn.Position = position
+	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+	btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	btn.Text = text .. ": OFF"
+	btn.Font = Enum.Font.Gotham
+	btn.TextSize = 16
+	btn.BorderSizePixel = 0
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+	btn.MouseButton1Click:Connect(function()
+		_G[stateVar] = not _G[stateVar]
+		btn.Text = text .. ": " .. (_G[stateVar] and "ON" or "OFF")
+		if _G[stateVar] then
+			if onEnable then onEnable() end
+		else
+			if onDisable then onDisable() end
+		end
+	end)
+end
+
+--// ESP
+local function isTeammate(plr)
+	return plr.Team == player.Team
+end
+
+local function applyESP(char)
+	if not char:FindFirstChild("AgfxHighlight") then
+		local hl = Instance.new("Highlight", char)
+		hl.Name = "AgfxHighlight"
+		hl.FillTransparency = 1
+		hl.OutlineTransparency = 0
+		hl.OutlineColor = Color3.new(1, 1, 1)
+		hl.Adornee = char
+	end
+end
+
+local function removeESP(char)
+	local hl = char:FindFirstChild("AgfxHighlight")
+	if hl then hl:Destroy() end
+end
+
+local function updateESP()
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and p.Character and not isTeammate(p) then
+			if _G.ESPEnabled then
+				applyESP(p.Character)
+			else
+				removeESP(p.Character)
+			end
+		end
+	end
+end
+
+RunService.Stepped:Connect(function()
+	if _G.ESPEnabled then updateESP() end
+end)
+
+--// Speed Lock
+RunService.Heartbeat:Connect(function()
+	if _G.SpeedLocked and humanoid and humanoid.WalkSpeed ~= 23 then
+		humanoid.WalkSpeed = 23
+	end
+end)
+
+--// Infinite Jump
+local function setupInfiniteJump(h)
+	UserInputService.JumpRequest:Connect(function()
+		if _G.InfiniteJumpEnabled then
+			h:ChangeState(Enum.HumanoidStateType.Jumping)
+		end
+	end)
+end
+
+setupInfiniteJump(humanoid)
+
+player.CharacterAdded:Connect(function(char)
+	humanoid = char:WaitForChild("Humanoid")
+	setupInfiniteJump(humanoid)
+	connectStateMonitor(humanoid)
+end)
+
+--// Camera Lock
+RunService.RenderStepped:Connect(function()
+	if _G.CameraLocked then
+		local closest, dist = nil, math.huge
+		for _, plr in pairs(Players:GetPlayers()) do
+			if plr ~= player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and not isTeammate(plr) then
+				local d = (plr.Character.HumanoidRootPart.Position - camera.CFrame.Position).Magnitude
+				if d < dist then
+					closest = plr.Character.HumanoidRootPart
+					dist = d
+				end
+			end
+		end
+		if closest then
+			camera.CFrame = CFrame.new(camera.CFrame.Position, closest.Position)
+		end
+	end
+end)
+
+--// Air Countdown
+local airGui = Instance.new("ScreenGui", player.PlayerGui)
+airGui.Name = "AirCountdownGui"
+airGui.ResetOnSpawn = false
+
+local countdownLabel = Instance.new("TextLabel", airGui)
+countdownLabel.Size = UDim2.new(0, 200, 0, 50)
+countdownLabel.Position = UDim2.new(0.5, -100, 0.3, 0)
+countdownLabel.BackgroundTransparency = 0.3
+countdownLabel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+countdownLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+countdownLabel.TextScaled = true
+countdownLabel.Visible = false
+countdownLabel.Font = Enum.Font.GothamBold
+countdownLabel.Text = "1.2"
+
+local isCounting = false
+local function startCountdown()
+	if isCounting or not _G.AirCountdownEnabled then return end
+	isCounting = true
+	countdownLabel.Visible = true
+	local timeLeft = 1.2
+	while timeLeft > 0 and isCounting do
+		countdownLabel.Text = string.format("%.1f", timeLeft)
+		RunService.RenderStepped:Wait()
+		timeLeft -= RunService.RenderStepped:Wait()
+	end
+	countdownLabel.Visible = false
+	isCounting = false
+end
+
+local airStates = {
+	[Enum.HumanoidStateType.Freefall] = true,
+	[Enum.HumanoidStateType.Jumping] = true,
+	[Enum.HumanoidStateType.FallingDown] = true,
+}
+
+function connectStateMonitor(h)
+	h.StateChanged:Connect(function(_, newState)
+		if airStates[newState] then
+			startCountdown()
+		else
+			isCounting = false
+			countdownLabel.Visible = false
+		end
+	end)
+end
+
+connectStateMonitor(humanoid)
+
+--// Buttons
+createToggleButton(mainFrame, "ESP opp", UDim2.new(0, 20, 0, 60), "ESPEnabled", updateESP, updateESP)
+createToggleButton(mainFrame, "Speed", UDim2.new(0, 200, 0, 60), "SpeedLocked")
+createToggleButton(mainFrame, "Aimbot - x", UDim2.new(0, 20, 0, 110), "CameraLocked")
+createToggleButton(mainFrame, "BW AC Timer", UDim2.new(0, 200, 0, 110), "AirCountdownEnabled")
+createToggleButton(mainFrame, "Fly Jump", UDim2.new(0, 20, 0, 160), "InfiniteJumpEnabled")
+
+--// Opacity Slider
+local sliderFrame = Instance.new("Frame", mainFrame)
+sliderFrame.Size = UDim2.new(0, 360, 0, 40)
+sliderFrame.Position = UDim2.new(0, 20, 0, 220)
+sliderFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+sliderFrame.BorderSizePixel = 0
+Instance.new("UICorner", sliderFrame).CornerRadius = UDim.new(0, 6)
+
+local bar = Instance.new("Frame", sliderFrame)
+bar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+bar.Size = UDim2.new(1, -20, 0, 6)
+bar.Position = UDim2.new(0, 10, 0.5, -3)
+bar.BorderSizePixel = 0
+Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 3)
+
+local knob = Instance.new("Frame", bar)
+knob.Size = UDim2.new(0, 10, 0, 16)
+knob.Position = UDim2.new(0, 0, -0.5, -5)
+knob.BackgroundColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", knob).CornerRadius = UDim.new(0, 4)
+
+local dragging = false
+local function updateOpacity(x)
+	local barAbsPos = bar.AbsolutePosition.X
+	local barWidth = bar.AbsoluteSize.X
+	local newX = math.clamp(x - barAbsPos, 0, barWidth)
+	local percent = newX / barWidth
+	knob.Position = UDim2.new(0, newX, -0.5, -5)
+	mainFrame.BackgroundTransparency = percent
+	for _, child in ipairs(mainFrame:GetDescendants()) do
+		if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("Frame") then
+			child.BackgroundTransparency = percent
+		end
+	end
+end
+
+knob.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		mainFrame.Draggable = false
+	end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = false
+		mainFrame.Draggable = true
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		updateOpacity(input.Position.X)
+	end
+end)
+
+--// Keybinds
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.RightShift then
+		mainFrame.Visible = not mainFrame.Visible
+	elseif input.KeyCode == Enum.KeyCode.Equals then
+		loadstring(game:HttpGet("https://raw.githubusercontent.com/VapeVoidware/VWExtra/main/metalesp.lua"))()
+	elseif input.KeyCode == Enum.KeyCode.X then
+		_G.CameraLocked = not _G.CameraLocked
+	elseif input.KeyCode == Enum.KeyCode.R then
+		_G.SpeedLocked = not _G.SpeedLocked
+	end
+end)
