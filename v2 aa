@@ -265,7 +265,7 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
---// Keybinds
+--// Keybinds (ONLY CAMLOCK MODIFIED BELOW)
 UserInputService.InputBegan:Connect(function(input, gpe)
 	if gpe then return end
 
@@ -276,7 +276,7 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 		if _G.CameraLocked then
 			local closest, dist = nil, math.huge
 			for _, p in ipairs(Players:GetPlayers()) do
-				if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+				if p ~= player and p.Team ~= player.Team and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 					local hrp = p.Character.HumanoidRootPart
 					local mag = (hrp.Position - camera.CFrame.Position).Magnitude
 					if mag < dist then
