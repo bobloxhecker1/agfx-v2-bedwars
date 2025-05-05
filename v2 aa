@@ -160,17 +160,35 @@ label.Font = Enum.Font.GothamBold
 label.Text = "1.2"
 
 local isCounting = false
+local countdownConnection = nil
+
 local function startCountdown()
-	if isCounting or not _G.AirCountdownEnabled then return end
-	isCounting = true
-	label.Visible = true
-	local t = 1.2
-	while t > 0 and isCounting do
-		label.Text = string.format("%.1f", t)
-		t -= RunService.RenderStepped:Wait()
-	end
-	label.Visible = false
-	isCounting = false
+    if isCounting or not _G.AirCountdownEnabled then return end
+    isCounting = true
+    label.Visible = true
+    local t = 1.2
+
+    if countdownConnection then
+        countdownConnection:Disconnect()
+    end
+
+    countdownConnection = RunService.RenderStepped:Connect(function(dt)
+        if not isCounting then
+            label.Visible = false
+            countdownConnection:Disconnect()
+            return
+        end
+
+        -- Decrease the time at half the speed
+        t = t - dt / 2
+        if t > 0 then
+            label.Text = string.format("%.1f", t)
+        else
+            label.Visible = false
+            isCounting = false
+            countdownConnection:Disconnect()
+        end
+    end)
 end
 
 function connectStateMonitor(h)
