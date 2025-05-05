@@ -132,7 +132,14 @@ end)
 local lockedTarget = nil
 RunService.RenderStepped:Connect(function()
 	if _G.CameraLocked and lockedTarget and lockedTarget.Parent then
-		camera.CFrame = CFrame.new(camera.CFrame.Position, lockedTarget.Position)
+		local human = lockedTarget.Parent:FindFirstChildOfClass("Humanoid")
+		if human and human.Health > 0 then
+			camera.CFrame = CFrame.new(camera.CFrame.Position, lockedTarget.Position)
+		else
+			-- Unlock if target is dead
+			_G.CameraLocked = false
+			lockedTarget = nil
+		end
 	end
 end)
 
@@ -265,7 +272,7 @@ UserInputService.InputChanged:Connect(function(input)
 	end
 end)
 
---// Keybinds (ONLY CAMLOCK MODIFIED BELOW)
+--// Keybinds (MODIFIED: camlock checks for dead enemies)
 UserInputService.InputBegan:Connect(function(input, gpe)
 	if gpe then return end
 
@@ -278,14 +285,20 @@ UserInputService.InputBegan:Connect(function(input, gpe)
 			for _, p in ipairs(Players:GetPlayers()) do
 				if p ~= player and p.Team ~= player.Team and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
 					local hrp = p.Character.HumanoidRootPart
-					local mag = (hrp.Position - camera.CFrame.Position).Magnitude
-					if mag < dist then
-						dist = mag
-						closest = hrp
+					local hum = p.Character:FindFirstChildOfClass("Humanoid")
+					if hum and hum.Health > 0 then
+						local mag = (hrp.Position - camera.CFrame.Position).Magnitude
+						if mag < dist then
+							dist = mag
+							closest = hrp
+						end
 					end
 				end
 			end
 			lockedTarget = closest
+			if not lockedTarget then
+				_G.CameraLocked = false
+			end
 		else
 			lockedTarget = nil
 		end
